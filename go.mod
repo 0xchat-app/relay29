@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	github.com/PowerDNS/lmdb-go v1.9.2 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.3 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.5 // indirect

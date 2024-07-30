@@ -56,6 +56,10 @@ func (s *State) restrictWritesBasedOnGroupRules(ctx context.Context, event *nost
 		}
 	}
 
+	if event.PubKey == s.publicKey {
+		return false, ""
+	}
+
 	// only members can write
 	group.mu.RLock()
 	defer group.mu.RUnlock()
@@ -101,6 +105,14 @@ func (s *State) restrictInvalidModerationActions(ctx context.Context, event *nos
 	action, err := nip29_relay.GetModerationAction(event)
 	if err != nil {
 		return true, "invalid moderation action: " + err.Error()
+	}
+
+	// remove self from group
+	if event.Kind == nostr.KindSimpleGroupRemoveUser {
+		users := GetUsersFromEvent(event)
+		if len(users) == 1 && event.PubKey == users[0] {
+			return false, ""
+		}
 	}
 
 	group.mu.RLock()

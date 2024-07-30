@@ -112,11 +112,12 @@ func (s *State) loadGroups(ctx context.Context) {
 
 		group := s.NewGroup(id)
 		f := nostr.Filter{
-			Limit: 5000, Kinds: nip29.ModerationEventKinds, Tags: nostr.TagMap{"h": []string{id}},
+			Kinds: nip29.ModerationEventKinds,
+			Tags:  nostr.TagMap{"h": []string{id}},
 		}
 		ch, _ := s.DB.QueryEvents(ctx, f)
 
-		events := make([]*nostr.Event, 0, 5000)
+		events := make([]*nostr.Event, 0)
 		for event := range ch {
 			events = append(events, event)
 		}
@@ -131,12 +132,33 @@ func (s *State) loadGroups(ctx context.Context) {
 }
 
 func (s *State) GetGroupFromEvent(event *nostr.Event) *Group {
-	group, _ := s.Groups.Load(GetGroupIDFromEvent(event))
+	groupID := GetGroupIDFromEvent(event)
+	if groupID == "" {
+		return nil
+	}
+	group, _ := s.Groups.Load(groupID)
 	return group
 }
 
 func GetGroupIDFromEvent(event *nostr.Event) string {
 	gtag := event.Tags.GetFirst([]string{"h", ""})
+	if gtag == nil || len(*gtag) < 2 {
+		return ""
+	}
 	groupId := (*gtag)[1]
 	return groupId
+}
+
+func GetUsersFromEvent(event *nostr.Event) []string {
+	pTags := event.Tags.GetAll([]string{"p", ""})
+	if len(pTags) == 0 {
+		return nil
+	}
+	var users []string
+	for _, tag := range pTags {
+		if len(tag) > 1 {
+			users = append(users, tag[1])
+		}
+	}
+	return users
 }
