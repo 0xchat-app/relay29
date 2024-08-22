@@ -76,7 +76,7 @@ func main() {
 		),
 		policies.PreventTimestampsInThePast(60),
 		policies.PreventTimestampsInTheFuture(30),
-		rateLimit,
+		// rateLimit,
 	)
 
 	log.Info().Str("relay-pubkey", s.RelayPubkey).Msg("running on http://0.0.0.0:" + s.Port)
