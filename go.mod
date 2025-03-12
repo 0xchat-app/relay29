@@ -18,6 +18,8 @@ require (
 	golang.org/x/time v0.5.0
 )
 
+replace github.com/nbd-wtf/go-nostr => ../go-nostr
+
 require (
 	github.com/PowerDNS/lmdb-go v1.9.2 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect

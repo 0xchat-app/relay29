@@ -187,6 +187,9 @@ func (s *State) ApplyModerationAction(ctx context.Context, event *nostr.Event) {
 		nostr.KindSimpleGroupEditMetadata: {
 			group.ToMetadataEvent,
 		},
+		nostr.KindSimpleGroupEditLevel: {
+			group.ToMetadataEvent,
+		},
 		nostr.KindSimpleGroupEditGroupStatus: {
 			group.ToMetadataEvent,
 		},
@@ -217,26 +220,63 @@ func (s *State) ReactToJoinRequest(ctx context.Context, event *nostr.Event) {
 
 	// if the group is open, anyone requesting to join will be allowed
 	group := s.GetGroupFromEvent(event)
+
 	if !group.Closed {
-		// immediately add the requester
-		addUser := &nostr.Event{
-			CreatedAt: nostr.Now(),
-			Kind:      nostr.KindSimpleGroupAddUser,
-			Tags: nostr.Tags{
-				nostr.Tag{"h", group.Address.ID},
-				nostr.Tag{"p", event.PubKey},
-			},
-		}
-		if err := addUser.Sign(s.secretKey); err != nil {
-			log.Error().Err(err).Msg("failed to sign add-user event")
-			return
-		}
-		if _, err := s.Relay.AddEvent(ctx, addUser); err != nil {
-			log.Error().Err(err).Msg("failed to add user who requested to join")
-			return
-		}
-		s.Relay.BroadcastEvent(addUser)
+		s.addUserToGroup(ctx, group, event.PubKey)
+		return
 	}
+	// If the group is closed but an invite code is set, verify the invite code.
+	if group.InviteCode != "" {
+		// Check if the invite code has expired.
+		if time.Now().After(group.InviteCodeUntil.Time()) {
+			log.Error().Msg("Join request failed: invite code expired")
+			return
+		}
+		// Try to get the invite code from the event tags.
+		if t := event.Tags.GetFirst([]string{"code", ""}); t != nil {
+			// Compare the invite code from the event with the group's invite code.
+			if (*t)[1] == group.InviteCode {
+				s.addUserToGroup(ctx, group, event.PubKey)
+				return
+			} else {
+				log.Error().Msg("Join request failed: invalid invite code")
+				return
+			}
+		} else {
+			log.Error().Msg("Join request failed: invite code missing in join request")
+			return
+		}
+	}
+
+	// If the group is closed and there is no invite code, reject the join request.
+	log.Error().Msg("Join request failed: group is closed")
+}
+
+func (s *State) addUserToGroup(ctx context.Context, group *Group, pubKey string) {
+	// Create a new event to add the user to the group.
+	addUser := &nostr.Event{
+		CreatedAt: nostr.Now(),
+		Kind:      nostr.KindSimpleGroupAddUser,
+		Tags: nostr.Tags{
+			nostr.Tag{"h", group.Address.ID},
+			nostr.Tag{"p", pubKey},
+		},
+	}
+
+	// Sign the event with the secret key.
+	if err := addUser.Sign(s.secretKey); err != nil {
+		log.Error().Err(err).Msg("Failed to sign add-user event")
+		return
+	}
+
+	// Add the event to the relay.
+	if _, err := s.Relay.AddEvent(ctx, addUser); err != nil {
+		log.Error().Err(err).Msg("Failed to add user who requested to join")
+		return
+	}
+
+	// Broadcast the event to notify the group members.
+	s.Relay.BroadcastEvent(addUser)
 }
 
 func (s *State) ReactToLeaveRequest(ctx context.Context, event *nostr.Event) {

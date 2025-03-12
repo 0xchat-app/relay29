@@ -2,12 +2,13 @@ package relay29
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip29"
 )
 
-var PTagNotValidPublicKey = fmt.Errorf("'p' tag value is not a valid public key")
+var ErrPTagNotValidPublicKey = fmt.Errorf("'p' tag value is not a valid public key")
 
 type Action interface {
 	Apply(group *nip29.Group)
@@ -27,7 +28,7 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 		targets := make([]string, 0, len(evt.Tags))
 		for _, tag := range evt.Tags.GetAll([]string{"p", ""}) {
 			if !nostr.IsValidPublicKey(tag[1]) {
-				return nil, PTagNotValidPublicKey
+				return nil, ErrPTagNotValidPublicKey
 			}
 			targets = append(targets, tag[1])
 		}
@@ -40,7 +41,7 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 		targets := make([]string, 0, len(evt.Tags))
 		for _, tag := range evt.Tags.GetAll([]string{"p", ""}) {
 			if !nostr.IsValidPublicKey(tag[1]) {
-				return nil, PTagNotValidPublicKey
+				return nil, ErrPTagNotValidPublicKey
 			}
 			targets = append(targets, tag[1])
 		}
@@ -69,6 +70,41 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 		}
 		return nil, fmt.Errorf("missing metadata tags")
 	},
+	nostr.KindSimpleGroupEditLevel: func(evt *nostr.Event) (Action, error) {
+		ok := false
+		edit := EditLevel{When: evt.CreatedAt}
+		if t := evt.Tags.GetFirst([]string{"level", ""}); t != nil {
+			i, _ := strconv.Atoi((*t)[1])
+			edit.Level = i
+			ok = true
+		}
+		if t := evt.Tags.GetFirst([]string{"levelUntil", ""}); t != nil {
+			i, _ := strconv.Atoi((*t)[1])
+			edit.LevelUntil = nostr.Timestamp(i)
+			ok = true
+		}
+		if ok {
+			return &edit, nil
+		}
+		return nil, fmt.Errorf("missing edit level tags")
+	},
+	nostr.KindSimpleGroupCreateInvite: func(evt *nostr.Event) (Action, error) {
+		ok := false
+		invite := CreateInvite{When: evt.CreatedAt}
+		if t := evt.Tags.GetFirst([]string{"code", ""}); t != nil {
+			invite.Code = (*t)[1]
+			ok = true
+		}
+		if t := evt.Tags.GetFirst([]string{"codeUntil", ""}); t != nil {
+			i, _ := strconv.Atoi((*t)[1])
+			invite.CodeUntil = nostr.Timestamp(i)
+			ok = true
+		}
+		if ok {
+			return &invite, nil
+		}
+		return nil, fmt.Errorf("missing invite code tags")
+	},
 	nostr.KindSimpleGroupAddPermission: func(evt *nostr.Event) (Action, error) {
 		nTags := len(evt.Tags)
 
@@ -84,7 +120,7 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 		targets := make([]string, 0, nTags-1)
 		for _, tag := range evt.Tags.GetAll([]string{"p", ""}) {
 			if !nostr.IsValidPublicKey(tag[1]) {
-				return nil, PTagNotValidPublicKey
+				return nil, ErrPTagNotValidPublicKey
 			}
 			targets = append(targets, tag[1])
 		}
@@ -110,7 +146,7 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 		targets := make([]string, 0, nTags-1)
 		for _, tag := range evt.Tags.GetAll([]string{"p", ""}) {
 			if !nostr.IsValidPublicKey(tag[1]) {
-				return nil, PTagNotValidPublicKey
+				return nil, ErrPTagNotValidPublicKey
 			}
 			targets = append(targets, tag[1])
 		}
@@ -216,6 +252,30 @@ func (a EditMetadata) Apply(group *nip29.Group) {
 	group.Picture = a.PictureValue
 	group.About = a.AboutValue
 	group.LastMetadataUpdate = a.When
+}
+
+type EditLevel struct {
+	Level      int
+	LevelUntil nostr.Timestamp
+	When       nostr.Timestamp
+}
+
+func (EditLevel) PermissionName() nip29.Permission { return nip29.PermEditLevel }
+func (a EditLevel) Apply(group *nip29.Group) {
+	group.Level = a.Level
+	group.LevelUntil = a.LevelUntil
+}
+
+type CreateInvite struct {
+	Code      string
+	CodeUntil nostr.Timestamp
+	When      nostr.Timestamp
+}
+
+func (CreateInvite) PermissionName() nip29.Permission { return nip29.PermCreateInvite }
+func (a CreateInvite) Apply(group *nip29.Group) {
+	group.InviteCode = a.Code
+	group.InviteCodeUntil = a.CodeUntil
 }
 
 type AddPermission struct {
@@ -327,6 +387,7 @@ func (a CreateGroup) Apply(group *nip29.Group) {
 			nip29.PermDeleteEvent:       {},
 			nip29.PermEditGroupStatus:   {},
 			nip29.PermDeleteGroupStatus: {},
+			nip29.PermCreateInvite:      {},
 		},
 	}
 	group.LastMetadataUpdate = a.When
@@ -346,6 +407,8 @@ func (a DeleteGroup) Apply(group *nip29.Group) {
 	group.Name = "[deleted]"
 	group.About = ""
 	group.Picture = ""
+	group.Level = 0
+	group.LevelUntil = 0
 	group.LastMetadataUpdate = a.When
 	group.LastAdminsUpdate = a.When
 	group.LastMembersUpdate = a.When
