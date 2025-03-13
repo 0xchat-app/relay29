@@ -60,8 +60,8 @@ github.com/fasthttp/websocket v1.5.12 h1:e4RGPpWW2HTbL3zV0Y/t7g0ub294LkiuXXUuTOU
 github.com/fasthttp/websocket v1.5.12/go.mod h1:I+liyL7/4moHojiOgUOIKEWm9EIxHqxZChS+aMFltyg=
 github.com/fiatjaf/eventstore v0.16.2 h1:h4rHwSwPcqAKqWUsAbYWUhDeSgm2Kp+PBkJc3FgBYu4=
 github.com/fiatjaf/eventstore v0.16.2/go.mod h1:0gU8fzYO/bG+NQAVlHtJWOlt3JKKFefh5Xjj2d1dLIs=
-github.com/fiatjaf/khatru v0.17.2 h1:oT+04wsEzWO/xoNc/YasWwMb5AV9XtmoJOo9T2Yn2iQ=
-github.com/fiatjaf/khatru v0.17.2/go.mod h1:skvuClN08ct3DwSFIflec3ClZYDfidVYHSQPbW1cRg0=
+github.com/fiatjaf/khatru v0.16.0 h1:xgGwnnOqE3989wEWm7c/z6Y6g4X92BFe/Xp1UWQ3Zmc=
+github.com/fiatjaf/khatru v0.16.0/go.mod h1:TLcMgPy3IAPh40VGYq6m+gxEMpDKHj+sumqcuvbSogc=
 github.com/fiatjaf/relayer/v2 v2.2.1 h1:BO9Za6kFB2n0aCAv5BCWfIijrSF3dGLZDoCC/8zgb0Y=
 github.com/fiatjaf/relayer/v2 v2.2.1/go.mod h1:5HASI/J7g/8h7KAGg1mw7scM3tJy5kggtyrdMyxmLao=
 github.com/fiatjaf/set v0.0.3 h1:LoawhcGoD504baBw0TwVJTQemzt15QYuxutzzWl2kgE=

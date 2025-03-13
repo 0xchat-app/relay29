@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/fiatjaf/eventstore v0.16.2
-	github.com/fiatjaf/khatru v0.17.2
+	github.com/fiatjaf/khatru v0.16.0
 	github.com/fiatjaf/relayer/v2 v2.2.1
 	github.com/fiatjaf/set v0.0.3
 	github.com/kelseyhightower/envconfig v1.4.0
