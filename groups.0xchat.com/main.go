@@ -73,7 +73,7 @@ func main() {
 	relay.RejectEvent = slices.Insert(relay.RejectEvent, 2,
 		policies.PreventLargeTags(640),
 		policies.PreventTooManyIndexableTags(6, []int{9000, 9001, 9003, 9004, 9005}, nil),
-		policies.RestrictToSpecifiedKinds(
+		policies.RestrictToSpecifiedKinds(false,
 			7, 9, 10, 11, 12, 16, 20, 1018, 1068, 1111,
 			30023, 31922, 31923, 9802,
 			9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008,
