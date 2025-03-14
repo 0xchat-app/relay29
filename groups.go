@@ -64,7 +64,20 @@ func (s *State) GetGroupFromEvent(event *nostr.Event) *Group {
 }
 
 func GetGroupIDFromEvent(event *nostr.Event) string {
+	if event == nil {
+		return ""
+	}
+
 	gtag := event.Tags.GetFirst([]string{"h", ""})
+
+	if gtag == nil {
+		return ""
+	}
+
+	if len(*gtag) < 2 {
+		return ""
+	}
+
 	groupId := (*gtag)[1]
 	return groupId
 }
