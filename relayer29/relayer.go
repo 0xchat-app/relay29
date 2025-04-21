@@ -109,6 +109,7 @@ func (s *Store) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nos
 		s.state.MetadataQueryHandler,
 		s.state.AdminsQueryHandler,
 		s.state.MembersQueryHandler,
+		s.state.RolesQueryHandler,
 	}
 	for _, rf := range rfs {
 		if evc, err := rf(ctx, filter); err == nil {
@@ -135,6 +136,7 @@ func (s *Store) SaveEvent(ctx context.Context, ev *nostr.Event) error {
 		s.state.RestrictWritesBasedOnGroupRules,
 		s.state.RestrictInvalidModerationActions,
 		s.state.PreventWritingOfEventsJustDeleted,
+		s.state.CheckPreviousTag,
 	}
 	for _, rf := range bfs {
 		if rejected, msg := rf(ctx, ev); rejected {
@@ -151,6 +153,7 @@ func (s *Store) SaveEvent(ctx context.Context, ev *nostr.Event) error {
 		s.state.ApplyModerationAction,
 		s.state.ReactToJoinRequest,
 		s.state.ReactToLeaveRequest,
+		s.state.AddToPreviousChecking,
 	}
 	for _, rf := range afs {
 		rf(ctx, ev)

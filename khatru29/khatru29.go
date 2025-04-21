@@ -30,6 +30,7 @@ func Init(opts relay29.Options) (*khatru.Relay, *relay29.State) {
 		state.MetadataQueryHandler,
 		state.AdminsQueryHandler,
 		state.MembersQueryHandler,
+		state.RolesQueryHandler,
 	)
 	relay.DeleteEvent = append(relay.DeleteEvent, state.DB.DeleteEvent)
 	relay.RejectFilter = append(relay.RejectFilter,
@@ -41,11 +42,13 @@ func Init(opts relay29.Options) (*khatru.Relay, *relay29.State) {
 		state.RestrictWritesBasedOnGroupRules,
 		state.RestrictInvalidModerationActions,
 		state.PreventWritingOfEventsJustDeleted,
+		state.CheckPreviousTag,
 	)
 	relay.OnEventSaved = append(relay.OnEventSaved,
 		state.ApplyModerationAction,
 		state.ReactToJoinRequest,
 		state.ReactToLeaveRequest,
+		state.AddToPreviousChecking,
 	)
 	relay.OnConnect = append(relay.OnConnect, khatru.RequestAuth)
 

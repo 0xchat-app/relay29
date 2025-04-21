@@ -20,8 +20,8 @@ import (
 
 type Settings struct {
 	Port             string `envconfig:"PORT" default:"5577"`
-	Domain           string `envconfig:"DOMAIN" default:"groups.0xchat.com"`
-	RelayName        string `envconfig:"RELAY_NAME" default:"0xchat groups relay"`
+	Domain           string `envconfig:"DOMAIN" required:"true"`
+	RelayName        string `envconfig:"RELAY_NAME" required:"true"`
 	RelayPrivkey     string `envconfig:"RELAY_PRIVKEY" required:"true"`
 	RelayDescription string `envconfig:"RELAY_DESCRIPTION"`
 	RelayContact     string `envconfig:"RELAY_CONTACT"`
@@ -54,7 +54,6 @@ func main() {
 
 	// load db
 	db.Path = s.DatabasePath
-	db.MaxLimit = 40000
 	if err := db.Init(); err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize database")
 		return
@@ -72,18 +71,21 @@ func main() {
 
 	// setup group-related restrictions
 	state.AllowAction = func(ctx context.Context, group nip29.Group, role *nip29.Role, action relay29.Action) bool {
+		// this is simple:
+		if _, ok := action.(relay29.PutUser); ok {
+			// anyone can invite new users
+			return true
+		}
 		if role == kingRole {
 			// owners can do everything
 			return true
 		}
 		if role == bishopRole {
-			// admins can invite new users, delete people and messages
+			// admins can delete people and messages
 			switch action.(type) {
 			case relay29.RemoveUser:
 				return true
 			case relay29.DeleteEvent:
-				return true
-			case relay29.PutUser:
 				return true
 			}
 		}
@@ -101,16 +103,23 @@ func main() {
 		blockDeletesOfOldMessages,
 	)
 	relay.RejectEvent = slices.Insert(relay.RejectEvent, 2,
-		policies.PreventLargeTags(640),
+		policies.PreventLargeTags(64),
+		policies.PreventTooManyIndexableTags(6, []int{9005}, nil),
 		policies.RestrictToSpecifiedKinds(
-			7, 9, 10, 11, 12, 16, 20, 1018, 1068, 1111,
+			9, 10, 11, 12, 1111,
 			30023, 31922, 31923, 9802,
-			9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008,
-			9021, 9022, 9321, 9735, 34235, 34236,
+			9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007,
+			9021, 9022,
 		),
 		policies.PreventTimestampsInThePast(60*time.Second),
 		policies.PreventTimestampsInTheFuture(30*time.Second),
+		rateLimit,
+		preventGroupCreation,
 	)
+
+	// http routes
+	relay.Router().HandleFunc("/create", handleCreateGroup)
+	relay.Router().HandleFunc("/", handleHomepage)
 
 	log.Info().Str("relay-pubkey", s.RelayPubkey).Msg("running on http://0.0.0.0:" + s.Port)
 	if err := http.ListenAndServe(":"+s.Port, relay); err != nil {

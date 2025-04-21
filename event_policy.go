@@ -2,6 +2,7 @@ package relay29
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nbd-wtf/go-nostr"
@@ -40,7 +41,7 @@ func (s *State) RestrictWritesBasedOnGroupRules(ctx context.Context, event *nost
 		defer group.mu.RUnlock()
 		if _, isMemberAlready := group.Members[event.PubKey]; isMemberAlready {
 			// unless you're already a member
-			return true, "already a member"
+			return true, "duplicate: already a member"
 		}
 		return false, ""
 	}
@@ -51,15 +52,16 @@ func (s *State) RestrictWritesBasedOnGroupRules(ctx context.Context, event *nost
 			// well, as long as the group doesn't exist, of course
 			return false, ""
 		} else {
-			return true, "group already exists"
+			return true, "duplicate: group already exists"
 		}
 	}
 
+	// the relay can write to any group
 	if event.PubKey == s.publicKey {
 		return false, ""
 	}
 
-	// only members can write
+	// aside from that only members can write
 	group.mu.RLock()
 	defer group.mu.RUnlock()
 	if _, isMember := group.Members[event.PubKey]; !isMember {
@@ -106,20 +108,63 @@ func (s *State) RestrictInvalidModerationActions(ctx context.Context, event *nos
 		return true, "invalid moderation action: " + err.Error()
 	}
 
-	if egs, ok := action.(EditGroupStatus); ok && egs.Private && !s.AllowPrivateGroups {
+	if egs, ok := action.(EditMetadata); ok && egs.PrivateValue != nil && *egs.PrivateValue && !s.AllowPrivateGroups {
 		return true, "groups cannot be private"
 	}
 
 	group.mu.RLock()
 	defer group.mu.RUnlock()
-	role, ok := group.Members[event.PubKey]
-	if !ok || role == nip29.EmptyRole {
-		return true, "unknown admin"
+	roles, _ := group.Members[event.PubKey]
+
+	// create-group doesn't trigger an AllowAction call -- it must be prevented on khatru's RejectEvent hook
+	if _, ok := action.(CreateGroup); !ok {
+		if s.AllowAction != nil {
+			for _, role := range roles {
+				if s.AllowAction(ctx, group.Group, role, action) {
+					// if any roles allow it, we are good
+					return false, ""
+				}
+			}
+		}
 	}
-	if _, ok := role.Permissions[action.PermissionName()]; !ok {
-		return true, "insufficient permissions"
+
+	// otherwise everything is forbidden (by default everything is forbidden)
+	return true, "insufficient permissions"
+}
+
+func (s *State) CheckPreviousTag(ctx context.Context, event *nostr.Event) (reject bool, msg string) {
+	previous := event.Tags.GetFirst([]string{"previous"})
+	if previous == nil {
+		return false, ""
 	}
+
+	group := s.GetGroupFromEvent(event)
+	for _, idFirstChars := range (*previous)[1:] {
+		if len(idFirstChars) > 64 {
+			return true, fmt.Sprintf("invalid value '%s' in previous tag", idFirstChars)
+		}
+		found := false
+		for _, id := range group.last50 {
+			if id == "" {
+				continue
+			}
+			if id[0:len(idFirstChars)] == idFirstChars {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return true, fmt.Sprintf("previous id '%s' wasn't found in this relay", idFirstChars)
+		}
+	}
+
 	return false, ""
+}
+
+func (s *State) AddToPreviousChecking(ctx context.Context, event *nostr.Event) {
+	group := s.GetGroupFromEvent(event)
+	lastIndex := group.last50index.Add(1) - 1
+	group.last50[lastIndex%50] = event.ID
 }
 
 func (s *State) ApplyModerationAction(ctx context.Context, event *nostr.Event) {
@@ -134,7 +179,8 @@ func (s *State) ApplyModerationAction(ctx context.Context, event *nostr.Event) {
 	if event.Kind == nostr.KindSimpleGroupCreateGroup {
 		// if it's a group creation event we create the group first
 		groupId := GetGroupIDFromEvent(event)
-		group = s.NewGroup(groupId)
+		group = s.NewGroup(groupId, event.PubKey)
+		group.Roles = s.defaultRoles
 		s.Groups.Store(groupId, group)
 	} else {
 		group = s.GetGroupFromEvent(event)
@@ -183,22 +229,14 @@ func (s *State) ApplyModerationAction(ctx context.Context, event *nostr.Event) {
 			group.ToMetadataEvent,
 			group.ToAdminsEvent,
 			group.ToMembersEvent,
+			group.ToRolesEvent,
 		},
 		nostr.KindSimpleGroupEditMetadata: {
 			group.ToMetadataEvent,
 		},
-		nostr.KindSimpleGroupEditGroupStatus: {
-			group.ToMetadataEvent,
-		},
-		nostr.KindSimpleGroupAddPermission: {
+		nostr.KindSimpleGroupPutUser: {
 			group.ToMembersEvent,
 			group.ToAdminsEvent,
-		},
-		nostr.KindSimpleGroupRemovePermission: {
-			group.ToAdminsEvent,
-		},
-		nostr.KindSimpleGroupAddUser: {
-			group.ToMembersEvent,
 		},
 		nostr.KindSimpleGroupRemoveUser: {
 			group.ToMembersEvent,
@@ -215,28 +253,49 @@ func (s *State) ReactToJoinRequest(ctx context.Context, event *nostr.Event) {
 		return
 	}
 
-	// if the group is open, anyone requesting to join will be allowed
+	// if the group is closed these will be ignored
 	group := s.GetGroupFromEvent(event)
-	if !group.Closed {
-		// immediately add the requester
-		addUser := &nostr.Event{
-			CreatedAt: nostr.Now(),
-			Kind:      nostr.KindSimpleGroupAddUser,
-			Tags: nostr.Tags{
-				nostr.Tag{"h", group.Address.ID},
-				nostr.Tag{"p", event.PubKey},
-			},
-		}
-		if err := addUser.Sign(s.secretKey); err != nil {
-			log.Error().Err(err).Msg("failed to sign add-user event")
-			return
-		}
-		if _, err := s.Relay.AddEvent(ctx, addUser); err != nil {
-			log.Error().Err(err).Msg("failed to add user who requested to join")
-			return
-		}
-		s.Relay.BroadcastEvent(addUser)
+	if group.Closed {
+		return
 	}
+
+	// otherwise anyone can join
+	// except for users previously removed
+	ch, err := s.DB.QueryEvents(ctx, nostr.Filter{
+		Kinds: []int{nostr.KindSimpleGroupRemoveUser},
+		Tags: nostr.TagMap{
+			"p": []string{event.PubKey},
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if requested user was previously removed")
+		return
+	}
+
+	// this means the user was previously removed
+	if nil != <-ch {
+		log.Error().Str("pubkey", event.PubKey).Msg("denying access to previously removed user")
+		return
+	}
+
+	// immediately add the requester
+	addUser := &nostr.Event{
+		CreatedAt: nostr.Now(),
+		Kind:      nostr.KindSimpleGroupPutUser,
+		Tags: nostr.Tags{
+			nostr.Tag{"h", group.Address.ID},
+			nostr.Tag{"p", event.PubKey},
+		},
+	}
+	if err := addUser.Sign(s.secretKey); err != nil {
+		log.Error().Err(err).Msg("failed to sign add-user event")
+		return
+	}
+	if _, err := s.Relay.AddEvent(ctx, addUser); err != nil {
+		log.Error().Err(err).Msg("failed to add user who requested to join")
+		return
+	}
+	s.Relay.BroadcastEvent(addUser)
 }
 
 func (s *State) ReactToLeaveRequest(ctx context.Context, event *nostr.Event) {
