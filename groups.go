@@ -48,14 +48,14 @@ func (s *State) loadGroupsFromDB(ctx context.Context) error {
 
 		group := s.NewGroup(id, evt.PubKey)
 		f := nostr.Filter{
-			Limit: 5000, Kinds: nip29.ModerationEventKinds, Tags: nostr.TagMap{"h": []string{id}},
+			Limit: 50000, Kinds: nip29.ModerationEventKinds, Tags: nostr.TagMap{"h": []string{id}},
 		}
 		ch, err := s.DB.QueryEvents(ctx, f)
 		if err != nil {
 			return err
 		}
 
-		events := make([]*nostr.Event, 0, 5000)
+		events := make([]*nostr.Event, 0, 50000)
 		for event := range ch {
 			events = append(events, event)
 		}
