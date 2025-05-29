@@ -88,14 +88,11 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 			ok = true
 		}
 
-		yy := true
-		nn := false
-
 		if t := evt.Tags.GetFirst([]string{"open"}); t != nil {
-			edit.ClosedValue = &nn
+			edit.ClosedValue = &n
 			ok = true
 		} else if t := evt.Tags.GetFirst([]string{"closed"}); t != nil {
-			edit.ClosedValue = &yy
+			edit.ClosedValue = &y
 			ok = true
 		}
 
@@ -194,7 +191,7 @@ func (a EditMetadata) Apply(group *nip29.Group) {
 		group.About = *a.AboutValue
 	}
 	if a.PrivateValue != nil {
-		group.Private = *a.PrivateValue
+		group.Private = !*a.PrivateValue
 	}
 	if a.ClosedValue != nil {
 		group.Closed = !*a.ClosedValue
