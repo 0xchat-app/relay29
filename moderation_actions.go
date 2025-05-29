@@ -88,11 +88,14 @@ var moderationActionFactories = map[int]func(*nostr.Event) (Action, error){
 			ok = true
 		}
 
+		yy := true
+		nn := false
+
 		if t := evt.Tags.GetFirst([]string{"open"}); t != nil {
-			edit.ClosedValue = &n
+			edit.ClosedValue = &nn
 			ok = true
 		} else if t := evt.Tags.GetFirst([]string{"closed"}); t != nil {
-			edit.ClosedValue = &y
+			edit.ClosedValue = &yy
 			ok = true
 		}
 
