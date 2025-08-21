@@ -2,6 +2,7 @@ package relay29
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -40,11 +41,18 @@ func (s *State) NewGroup(id string, creator string) *Group {
 func (s *State) loadGroupsFromDB(ctx context.Context) error {
 	groupMetadataEvents, err := s.DB.QueryEvents(ctx, nostr.Filter{Kinds: []int{nostr.KindSimpleGroupCreateGroup}})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to query group creation events: %w", err)
 	}
+
 	for evt := range groupMetadataEvents {
 		gtag := evt.Tags.GetFirst([]string{"h", ""})
+		if gtag == nil || len(*gtag) < 2 {
+			continue // skip events with invalid h tags
+		}
 		id := (*gtag)[1]
+		if id == "" {
+			continue // skip events with empty group id
+		}
 
 		group := s.NewGroup(id, evt.PubKey)
 		f := nostr.Filter{
@@ -63,9 +71,11 @@ func (s *State) loadGroupsFromDB(ctx context.Context) error {
 			evt := events[i]
 			act, err := PrepareModerationAction(evt)
 			if err != nil {
-				return err
+				continue // skip invalid moderation actions
 			}
-			act.Apply(&group.Group)
+			if act != nil {
+				act.Apply(&group.Group)
+			}
 		}
 
 		// if the group was deleted there will be no actions after the delete
