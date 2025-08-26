@@ -17,6 +17,9 @@ func Init(opts relay29.Options) (*khatru.Relay, *relay29.State) {
 	relay.Info.PubKey = pubkey
 	relay.Info.SupportedNIPs = append(relay.Info.SupportedNIPs, 29)
 
+	// Set ServiceURL based on Domain for proper authentication
+	relay.ServiceURL = "https://" + opts.Domain
+
 	// assign khatru relay to relay29.State
 	state.Relay = relay
 
