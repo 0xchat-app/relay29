@@ -245,9 +245,9 @@ func (s *State) NormalEventQuery(ctx context.Context, filter nostr.Filter) (chan
 		allowed := set.NewSliceSet[string]()
 		disallowed := set.NewSliceSet[string]()
 		for evt := range results {
-			if group := s.GetGroupFromEvent(evt); !group.Private || allowed.Has(group.Address.ID) {
+			if group := s.GetGroupFromEvent(evt); group != nil && (!group.Private || allowed.Has(group.Address.ID)) {
 				ch <- evt
-			} else if authed != "" && !disallowed.Has(group.Address.ID) {
+			} else if group != nil && authed != "" && !disallowed.Has(group.Address.ID) {
 				group.mu.RLock()
 				if _, isMember := group.Members[authed]; isMember {
 					allowed.Add(group.Address.ID)
