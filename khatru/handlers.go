@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -328,10 +327,7 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 					rl.removeListenerId(ws, id)
 				case *nostr.AuthEnvelope:
 					wsBaseUrl := strings.Replace(rl.getBaseURL(r), "http", "ws", 1)
-					// Add debug logging for authentication
-					fmt.Printf("DEBUG: AUTH attempt - Challenge: %s, Event: %+v, BaseURL: %s\n", ws.Challenge, env.Event, wsBaseUrl)
 					if pubkey, ok := nip42.ValidateAuthEvent(&env.Event, ws.Challenge, wsBaseUrl); ok {
-						fmt.Printf("DEBUG: AUTH successful for pubkey: %s\n", pubkey)
 						ws.AuthedPublicKey = pubkey
 						ws.authLock.Lock()
 						if ws.Authed != nil {
@@ -341,7 +337,6 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 						ws.authLock.Unlock()
 						ws.WriteJSON(nostr.OKEnvelope{EventID: env.Event.ID, OK: true})
 					} else {
-						fmt.Printf("DEBUG: AUTH failed - pubkey: %s, ok: %v\n", pubkey, ok)
 						ws.WriteJSON(nostr.OKEnvelope{EventID: env.Event.ID, OK: false, Reason: "error: failed to authenticate"})
 					}
 				case *nip77.OpenEnvelope:
