@@ -16,7 +16,7 @@ type State struct {
 	Groups *xsync.MapOf[string, *Group]
 	DB     eventstore.Store
 	Relay  interface {
-		BroadcastEvent(*nostr.Event)
+		BroadcastEvent(*nostr.Event) int
 		AddEvent(context.Context, *nostr.Event) (skipBroadcast bool, writeError error)
 	}
 	GetAuthed func(context.Context) string

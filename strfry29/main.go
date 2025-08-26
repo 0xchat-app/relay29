@@ -148,6 +148,7 @@ func (p protoRelay) AddEvent(ctx context.Context, evt *nostr.Event) (skipBroadca
 	return false, err
 }
 
-func (p protoRelay) BroadcastEvent(evt *nostr.Event) {
+func (p protoRelay) BroadcastEvent(evt *nostr.Event) int {
 	strfrydb.SaveEvent(ctx, evt)
+	return 0
 }
