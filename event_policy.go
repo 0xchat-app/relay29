@@ -260,10 +260,12 @@ func (s *State) ReactToJoinRequest(ctx context.Context, event *nostr.Event) {
 	}
 
 	// otherwise anyone can join
-	// except for users previously removed
+	// except for users previously removed from this specific group
+	// check if user was previously removed from this specific group
 	ch, err := s.DB.QueryEvents(ctx, nostr.Filter{
 		Kinds: []int{nostr.KindSimpleGroupRemoveUser},
 		Tags: nostr.TagMap{
+			"h": []string{group.Address.ID},
 			"p": []string{event.PubKey},
 		},
 	})
@@ -272,9 +274,9 @@ func (s *State) ReactToJoinRequest(ctx context.Context, event *nostr.Event) {
 		return
 	}
 
-	// this means the user was previously removed
+	// this means the user was previously removed from this group
 	if nil != <-ch {
-		log.Error().Str("pubkey", event.PubKey).Msg("denying access to previously removed user")
+		log.Error().Str("pubkey", event.PubKey).Str("group", group.Address.ID).Msg("denying access to previously removed user")
 		return
 	}
 
